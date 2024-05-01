@@ -1,0 +1,382 @@
+---
+title: "Letterboxd Movies"
+author: "Jacob Álvarez"
+institute: "American University, School of International Service"
+date: "05/01/2024"
+output:
+  xaringan::moon_reader:
+    css: [default, rladies-fonts]
+    lib_dir: libs
+    seal: true
+    self_contained: true
+---
+
+```{r eval=TRUE, echo=FALSE, message=FALSE, warning=FALSE}
+#load packages
+library(tidyverse)
+library(patchwork)
+
+#fread loads it faster than read.csv
+movies <- data.table::fread("movie_data.csv")
+
+#Tidy Data-----
+
+#select desired variables
+movies <-
+  movies |>
+  select(original_language, production_countries, runtime,
+         year_released, popularity)
+
+#make numeral variables numeric
+movies <-
+  movies |>
+  mutate(year_released = as.numeric(year_released),
+         runtime = as.numeric(runtime),
+         popularity = as.numeric(popularity)
+  )
+
+#clean production_countries
+
+#remove brackets and quotes from production_countries strings
+movies <-
+  movies |>
+  mutate(across(c('production_countries'),
+                substr, 4, nchar(production_countries)))
+
+movies$production_countries =
+  substr(movies$production_countries, 1,
+         nchar(movies$production_countries)-3)
+
+#create "multiple" category for movies filmed in more than one country
+movies$production_countries[grepl(',', movies$production_countries)] <- 'Multiple'
+
+#NA for no country name
+movies <-
+  movies |>
+  mutate(
+    production_countries = na_if(production_countries, "")
+  )
+
+#factorize
+movies <-
+  movies |>
+  mutate(
+    production_countries = as.factor(production_countries)
+  )
+
+#variable rename and "other" category creation
+movies <-
+  movies |>
+  mutate(
+    production_countries = case_when(
+      production_countries == "United States of America" ~ "US",
+      production_countries == "Multiple" ~ "Multiple",
+      production_countries == "United Kingdom" ~ "UK",
+      production_countries == "Japan" ~ "Japan",
+      production_countries == "France" ~ "France",
+      production_countries != c("United States of America", "Multiple",                   "United Kingdom", "Japan",
+                             "France") ~ "Other"
+    )
+  )
+
+#factor relevel
+movies <-
+  movies |>
+  mutate(
+    production_countries = fct_relevel(production_countries, "Other", "US", "Multiple",
+                      "UK", "Japan", "France")
+  )
+
+#clean original_language variable
+
+#NA for no language
+movies <-
+  movies |>
+  mutate(
+    original_language = na_if(original_language, "null")
+  )
+
+#expand top language names
+movies$original_language <- str_replace_all(movies$original_language,
+                                            c("en" = "English",
+                                              "es" = "Spanish",
+                                              "fr" = "French",
+                                              "ja" = "Japanese",
+                                              "pl" = "Polish",
+                                              "pt" = "Portuguese",
+                                              "ru" = "Russian",              
+                                              "ko" = "Korean",
+                                              "zh" = "Mandarin",
+                                              "it" = "Italian"))
+#"other" for all other langauges
+movies <-
+  movies |>
+  mutate(
+    original_language = case_when(
+      original_language == "English" ~ "English",
+      original_language == "Spanish" ~ "Spanish",
+      original_language == "French" ~ "French",
+      original_language == "Japanese" ~ "Japanese",
+      original_language == "Korean" ~ "Korean",
+      original_language == "Mandarin" ~ "Mandarin",
+      original_language == "Portuguese" ~ "Portuguese",
+      original_language == "Russian" ~ "Russian",
+      original_language == "Italian" ~ "Italian",
+      original_language == "Polish" ~ "Polish",
+      original_language != c("English", "Spanish",
+                             "French", "Japanese",
+                             "Korean", "Mandarin",
+                             "Portuguese", "Russian",
+                             "Polish", "Italian") ~ "Other"
+    )
+  )
+
+#factorize
+movies <-
+  movies |>
+  mutate(
+    original_language = as.factor(original_language)
+  )
+
+#relevel for later visualization
+movies <-
+  movies |>
+  mutate(
+    original_language = fct_relevel(original_language, "English", "Japanese",
+                      "Spanish", "French", "Korean",
+                      "Mandarin", "Polish", "Portuguese",
+                      "Russian", "Italian", "Other")
+  )
+
+#visual variable
+
+#create fill color variable for bar plots
+movies <-
+  movies |>
+    mutate(
+      fillcolor = case_when(
+        runtime %in% 0:60 ~ "orange",
+        runtime %in% 61:120 ~ "green",
+        runtime %in% 121: 180 ~ "blue",
+        runtime %in% 181:240 ~ "orange",
+        runtime %in% 241:300 ~ "green",
+      )
+    )
+```
+#Data
+
+-Letterboxd: List and track films, user-submitted ratings and reviews
+
+-Data accessed in March 2024 from a publically-accessible dataset on Kaggle.com
+
+-280,000+ observations
+
+-Variables include runtime, genre, language, country of production, and year of release
+
+---
+#Key Variable: Runtime
+
+```{r message=FALSE, warning=FALSE, echo=FALSE, eval=TRUE, fig.align='center'}
+
+#create "runtime" visualization
+runtime <-
+movies |>
+  filter(year_released %in% 1900:2020) |>
+  ggplot(aes(x = runtime, fill = fillcolor)) +
+  geom_bar(width = 1) +
+  scale_x_continuous(
+    limits = c(0, 210),
+    breaks = c(0, 30, 60, 90, 120, 150, 180, 210),
+    labels = c(0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  scale_y_continuous(
+    breaks = c(2000, 4000, 6000, 8000, 10000, 12000),
+    labels = c(2, 4, 6, 8, 10, 12),
+    limits = c(0, 13000),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  scale_fill_manual(
+    values = c(
+      "orange" = "#ff8000",
+      "green" = "#00e054",
+      "blue" = "#40bcf4"
+    ) 
+  ) +
+  labs(
+    y = "Number of Movies (Thousands)",
+    x = "Runtime (Hours)",
+    title = "Movies by Runtime, 1900-2020"
+  )
+
+#above chunk running long, separate theme chunk
+runtime <-
+runtime +
+  theme(
+    panel.background = element_rect(fill = "#323d49"),
+    plot.background = element_rect(fill = "#323d49"),
+    panel.grid.major.y = element_line(color = "white", 
+                              linetype = 1),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.border = element_rect(color = "white", fill = NA, size = .5),
+    legend.position = "none",
+    axis.title.y = element_text(color = "white",
+                                family = "serif",
+                                face = "bold",
+                                size = 20),
+    axis.title.x = element_text(color = "white",
+                                family = "serif",
+                                face = "bold",
+                                size = 20),
+    plot.title = element_text(color = "white",
+                              family = "serif",
+                              hjust = .5,
+                              face = "bold",
+                                size = 25),
+    axis.ticks = element_blank(),
+    axis.text = element_text(color = "white",
+                             family = "serif",
+                             face = "bold",
+                                size = 15)
+  )
+
+#print
+runtime
+```
+---
+#Two Visualizations: Language and Country
+```{r message=FALSE, warning=FALSE, echo=FALSE, eval=TRUE, fig.width=14, fig.align='center', fig.height= 9}
+
+#create language visualization
+language <-
+  movies |>
+  filter(popularity > 59.701) |>
+  ggplot(aes(x = original_language, fill = original_language)) +
+  geom_bar() +
+  geom_label(aes(label = ..count..), stat = "count",
+             vjust = 0, color = "white", fill = "#323d49",
+             label.size = NA, size = 8) +
+  scale_fill_manual(values = c("#ff8000", "#00e054", "#40bcf4",
+                               "#ff8000", "#00e054", "#40bcf4",
+                               "#ff8000", "#00e054", "#40bcf4",
+                               "#ff8000", "#00e054")) +
+  labs(
+    x = "Original Language",
+    y = "Number of Movies",
+    title = "Letterboxd's 1000 Most Popular Movies by Language"
+  ) +
+  scale_y_continuous(
+    limits = c(0, 1000),
+    expand = expansion(mult = c(0, 0.05))
+  )
+
+#above chunk running long, separate theme chunk
+language <-
+language +
+  theme(
+    panel.background = element_rect(fill = "#323d49"),
+    plot.background = element_rect(fill = "#323d49"),
+    legend.position = "none",
+    panel.grid.major.y = element_line(color = "white", 
+                                    linetype = 1),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.border = element_rect(color = "white", fill = NA, size = .5),
+    axis.title.y = element_text(color = "white",
+                                family = "serif",
+                                face = "bold",
+                                size = 25),
+    axis.title.x = element_text(color = "white",
+                                family = "serif",
+                                face = "bold",
+                                size = 25),
+    plot.title = element_text(color = "white",
+                              family = "serif",
+                              hjust = .5,
+                              face = "bold",
+                              size = 20),
+    axis.ticks = element_blank(),
+    axis.text = element_text(color = "white",
+                             family = "serif",
+                             face = "bold",
+                             size = 20),
+    axis.text.x = element_text(angle = 90,
+                               vjust = .3,
+                               hjust = 1)
+  )
+
+#create production country visualization
+prod <-
+movies |>
+  filter(year_released %in% 1900:2020) |>
+  filter(production_countries == c("US", "Multiple", "UK", "Japan", "France", "Other")) |>
+  ggplot(aes(x = year_released, color = production_countries)) +
+  geom_line(stat = "count", linewidth = 1.5) +
+  scale_x_continuous(
+    breaks = c(1900, 1920, 1940, 1960, 1980, 2000, 2020),
+    limits = c(1900, 2020),
+    expand = expansion(mult = c(0, 0))
+  ) +
+  scale_color_manual(values = c("#8BC1F7", "#7CC674", "#B2B0EA",
+                                "#dd5182", "#ff6e54", "yellow")) +
+  labs(
+    y = "Number of Movies",
+    x = "Year Released",
+    title = "Most Prolific Movie-Producing Countries by Year",
+    color = "Legend"
+  )
+
+#above chunk running long, separate theme chunk
+prod <-
+prod +
+  theme(
+    panel.background = element_rect(fill = "#323d49"),
+    plot.background = element_rect(fill = "#323d49"),
+    panel.grid.major = element_line(color = "white", 
+                                    linetype = 1),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(color = "white", fill = NA, size = .5),
+    axis.title.y = element_text(color = "white",
+                                family = "serif",
+                                face = "bold",
+                                size = 25),
+    axis.title.x = element_text(color = "white",
+                                family = "serif",
+                                face = "bold",
+                                size = 25),
+    plot.title = element_text(color = "white",
+                              family = "serif",
+                              hjust = .5,
+                              face = "bold",
+                              size = 20),
+    axis.ticks = element_blank(),
+    axis.text = element_text(color = "white",
+                             family = "serif",
+                             face = "bold",
+                             size = 20),
+    legend.background = element_rect(fill = "#323d49"),
+    legend.key = element_rect(fill = "#323d49"),
+    legend.text = element_text(color = "white",
+                               family = "serif",
+                               face = "bold",
+                               size = 15),
+    legend.title = element_text(color = "white",
+                                family = "serif",
+                                face = "bold",
+                                size = 15),
+        axis.text.x = element_text(angle = 90,
+                               vjust = .3,
+                               hjust = 1)
+  )
+
+#patchwork layout
+layout <-
+  "
+  AAABB
+  "
+
+#patchwork combine and print
+language + prod + plot_layout(design = layout) &
+  plot_annotation(theme = theme(plot.background = element_rect(fill  = "#323d49")))
+```
