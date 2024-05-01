@@ -1,1 +1,1 @@
-# Slide-Deck
+This slide deck project was an assignment for a graduate-level data analysis course in Spring 2024. The data came from one dataset on Kaggle.com (link in "Replication Data" file). The goal was to tidy real-world data and create effective visualizations. I used a large dataset of movies to visualize hundreds of thousands of movies' runtimes and countries of origin, as well as the original languages of Letterboxd's 1000 favorite films.
